@@ -1,0 +1,4 @@
+    [ #drop define ] |x| exit
+    [ #swap define ] |ab| exit
+    [ #2swap define ] |badc| exit
+    [ #over define ] |bab| exit

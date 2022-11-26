@@ -1,0 +1,20 @@
+#lang flit
+
+literate comment
+
+
+    [ 1 2 3 foo ]
+
+    { 4 5 6 }
+
+    ( 7 )
+
+    ( "8 9" )
+
+    'c' bar \ comment
+
+    { 12 quux ( 13 biz ) [ 14 15 baz ] (( 16 17 bash )) }
+
+    #foo
+
+    #file#

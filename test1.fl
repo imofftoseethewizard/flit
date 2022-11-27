@@ -12,7 +12,7 @@ literate comment
 
     'c' \ bar comment
 
-    { 12 quux ( 13 biz ) [ 14 15 baz ] (( 16 17 bash )) }
+    [ #bar define ] { 12 [ foo print ] } exit [ bar ]
 
     #foo
 

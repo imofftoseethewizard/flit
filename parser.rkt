@@ -4,7 +4,7 @@ flit-program: ( compiled-phrase | deferred-phrase | @executed-phrase )*
 
 compiled-phrase: @atom*
 
-deferred-phrase: /"{" ( @atom | @executed-phrase )* /"}"
+deferred-phrase: /"{" ( compiled-phrase | @executed-phrase )* /"}"
 
 /executed-phrase:
     simple-executed-phrase

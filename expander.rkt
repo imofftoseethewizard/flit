@@ -158,7 +158,13 @@
         (set-runtime-instruction-pointer! rt v))))
 
 (define (flit-program program)
-  (flit-evaluate (make-runtime) (expand-phrases (cdr program))))
+  (let ([rt (make-runtime)])
+    (flit-evaluate rt (expand-phrases (cdr program)))
+    (pretty-print (vector-take (runtime-memory rt) (runtime-memory-pointer rt)))
+    (pretty-print (stringset-index (runtime-strings rt)))
+    (pretty-print (stringset-index (runtime-symbols rt)))
+    (pretty-print (runtime-dictionary rt))
+    (pretty-print (runtime-stack rt))))
 
 (provide flit-program)
 
@@ -174,12 +180,10 @@
        (defer-phrase rt phrase)]
 
       [(executed-phrase)
-       (execute-phrase rt phrase)]))
-  (pretty-print (vector-take (runtime-memory rt) (runtime-memory-pointer rt)))
-  (pretty-print (stringset-index (runtime-strings rt)))
-  (pretty-print (stringset-index (runtime-symbols rt)))
-  (pretty-print (runtime-dictionary rt))
-  (pretty-print (runtime-stack rt)))
+       (execute-phrase rt phrase)]
+
+      [else
+       (error "unknown phrase type" phrase)])))
 
 (define (expand-phrases phrases)
   (for/list ([phrase phrases])
@@ -203,13 +207,15 @@
 
 (define (expand-deferred-phrase phrase)
   `(deferred-phrase
-     ,(for/list ([atom-or-phrase (cdr phrase)])
-        (case (car atom-or-phrase)
+     ,(for/list ([sub-phrase (cdr phrase)])
+        (case (car sub-phrase)
           [(simple-executed-phrase executed-phrase-compiled-as-word executed-phrase-compiled-as-double-word)
-           (expand-executed-phrase atom-or-phrase)]
+           (expand-executed-phrase sub-phrase)]
 
-          [(character name number string symbol)
-           (deferred-atom atom-or-phrase)]))))
+          [(compiled-phrase)
+           (expand-compiled-phrase sub-phrase)]
+
+          [else (error "unknown deferred phrase type" sub-phrase)]))))
 
 (define (expand-executed-phrase phrase)
   `(executed-phrase
@@ -231,15 +237,6 @@
     [(symbol) `(compile-symbol ,atom)]
     [else `(syntax-error "unknown-atom-type" ,atom)]))
 
-(define (deferred-atom atom)
-  (case (car atom)
-    [(character) `(defer-character ,atom)]
-    [(name) `(defer-named-procedure ,atom)]
-    [(number) `(defer-number ,atom)]
-    [(string) `(defer-string ,atom)]
-    [(symbol) `(defer-symbol ,atom)]
-    [else `(syntax-error "unknown-atom-type" ,atom)]))
-
 (define (executed-atom atom)
   (case (car atom)
     [(character) `(push-character ,atom)]
@@ -252,14 +249,6 @@
 (define (compile-phrase rt phrase)
   (for ([atom (cadr phrase)])
     (compile-atom rt atom)))
-
-(define (defer-phrase rt phrase)
-  (for ([atom (cadr phrase)])
-    (defer-atom rt atom)))
-
-(define (execute-phrase rt phrase)
-  (for ([atom (cadr phrase)])
-    (execute-atom rt atom)))
 
 (define (compile-atom rt atom)
   (let ([v (cadr atom)])
@@ -276,7 +265,12 @@
       [(compile-symbol)
        (runtime-compile-atom! rt `(symbol-ref ,(runtime-inter-symbol! rt (cadr v))))])))
 
-(define (defer-atom rt atom) #f)
+(define (defer-phrase rt phrase)
+  (runtime-compile-atom! rt `(defer ,(cadr phrase))))
+
+(define (execute-phrase rt phrase)
+  (for ([atom (cadr phrase)])
+    (execute-atom rt atom)))
 
 (define (execute-atom rt atom)
   (let ([v (cadr atom)])
@@ -307,6 +301,9 @@
   (case (car atom)
     [(call)
      (runtime-call! rt (cadr atom))]
+
+    [(defer)
+     (flit-evaluate rt (cadr atom))]
 
     [else
      (runtime-push! rt atom)]))

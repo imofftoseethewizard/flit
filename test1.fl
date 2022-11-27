@@ -2,8 +2,7 @@
 
 literate comment
 
-
-    [ 1 2 3 foo ]
+    [ "a" 1 2 3 #foo define ] ( 42 ) exit [ foo ]
 
     { 4 5 6 }
 
@@ -11,10 +10,16 @@ literate comment
 
     ( "8 9" )
 
-    'c' bar \ comment
+    'c' \ bar comment
 
     { 12 quux ( 13 biz ) [ 14 15 baz ] (( 16 17 bash )) }
 
     #foo
 
     #file#
+
+    "hello world!"
+
+    456
+
+    [ #greet define ] "Hello, World!" print exit [ greet ]

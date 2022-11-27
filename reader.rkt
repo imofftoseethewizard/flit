@@ -53,7 +53,7 @@
        [(:seq "\""
               (:*
                (:or
-                (complement (char-set "\"\\"))
+                (:* (:~ "\"" "\\"))
                 (:seq "\\" any-char)))
               "\"")
         (token 'STRING (string-trim lexeme "\"")

@@ -49,6 +49,7 @@
    strings
    (stack #:mutable)
    (return-stack #:mutable)
+   (control-stack #:mutable)
    (instruction-pointer #:mutable)))
 
 (define (make-runtime)
@@ -60,17 +61,17 @@
              (make-hash)
              (make-stringset)
              (make-stringset)
-             (list)
-             (list)
+             '()
+             '()
+             '()
              #f)])
     (runtime-initialize-builtins! rt)
     rt))
 
 (define (runtime-initialize-builtins! rt)
   (let ([d (runtime-dictionary rt)])
-    (hash-set! d (runtime-inter-symbol! rt "define") runtime-define!)
-    (hash-set! d (runtime-inter-symbol! rt "exit") runtime-exit!)
-    (hash-set! d (runtime-inter-symbol! rt "print") runtime-print!)))
+    (for ([def builtins])
+      (hash-set! d (runtime-inter-symbol! rt (car def)) (cdr def)))))
 
 (define (runtime-define! rt)
   (let ([symbol-ref (runtime-pop! rt)])
@@ -79,9 +80,37 @@
 (define (runtime-exit! rt)
   (set-runtime-instruction-pointer! rt (runtime-return-pop! rt)))
 
+(define (runtime-compile-if! rt)
+  (runtime-control-push! rt (runtime-memory-pointer rt))
+  (runtime-compile-atom! rt '(branch-if-0 #f)))
+
+(define (runtime-compile-else! rt)
+  (let* ([mp (runtime-memory-pointer rt)]
+         [origin-mp (runtime-control-pop! rt)]
+         [origin (runtime-ref-memory rt origin-mp)])
+    (runtime-compile-atom! rt '(jump #f))
+    (runtime-control-push! rt mp)
+    (let ([offset (- (runtime-memory-pointer rt) origin-mp 1)])
+      (runtime-set-memory! rt origin-mp `(,(car origin) ,offset)))))
+
+(define (runtime-compile-then! rt)
+  (let* ([origin-mp (runtime-control-pop! rt)]
+         [origin (runtime-ref-memory rt origin-mp)]
+         [offset (- (runtime-memory-pointer rt) origin-mp 1)])
+    (runtime-set-memory! rt origin-mp `(,(car origin) ,offset))))
+
+(define (runtime-branch-if-0! rt offset)
+  (let ([v (runtime-pop! rt)])
+    (when (and (eq? 'number (car v))
+               (zero? (cadr v)))
+      (runtime-jump! rt offset))))
+
+(define (runtime-jump! rt offset)
+  (set-runtime-instruction-pointer! rt (+ offset (runtime-instruction-pointer rt))))
+
 (define (runtime-print! rt)
   (let ([atom (runtime-pop! rt)])
-    (display (case (car atom)
+    (displayln (case (car atom)
                [(character number)
                 (cadr atom)]
 
@@ -98,12 +127,26 @@
     (vector-set! (runtime-memory rt) memory-pointer atom)
     (set-runtime-memory-pointer! rt (+ 1 memory-pointer))))
 
+(define builtins
+  `(("define" . ,runtime-define!)
+    ("else"   . ,runtime-compile-else!)
+    ("exit"   . ,runtime-exit!)
+    ("if"     . ,runtime-compile-if!)
+    ("print"  . ,runtime-print!)
+    ("then"   . ,runtime-compile-then!)))
+
 (define (runtime-memory-full? rt)
   (= (runtime-memory-pointer rt) (vector-length (runtime-memory rt))))
 
 (define (runtime-expand-memory! rt)
   (set-runtime-memory! rt (vector-append (runtime-memory rt)
                                          (make-vector (runtime-memory-pointer rt) #f))))
+
+(define (runtime-ref-memory rt mp)
+  (vector-ref (runtime-memory rt) mp))
+
+(define (runtime-set-memory! rt mp atom)
+  (vector-set! (runtime-memory rt) mp atom))
 
 (define (runtime-inter-string! rt v)
   (stringset-inter! (runtime-strings rt) v))
@@ -118,9 +161,20 @@
   (set-runtime-stack! rt (cons v (runtime-stack rt))))
 
 (define (runtime-pop! rt)
-  (let* ([stack (runtime-stack rt)]
+  (let ([stack (runtime-stack rt)])
+    (when (empty? stack)
+      (error "stack-underflow"))
+    (let ([atom (car stack)])
+      (set-runtime-stack! rt (cdr stack))
+      atom)))
+
+(define (runtime-control-push! rt v)
+  (set-runtime-control-stack! rt (cons v (runtime-control-stack rt))))
+
+(define (runtime-control-pop! rt)
+  (let* ([stack (runtime-control-stack rt)]
          [atom (car stack)])
-    (set-runtime-stack! rt (cdr stack))
+    (set-runtime-control-stack! rt (cdr stack))
     atom))
 
 (define (runtime-return-push! rt v)
@@ -144,11 +198,18 @@
   (let loop ()
     (let* ([ip (runtime-instruction-pointer rt)]
            [atom (vector-ref (runtime-memory rt) ip)])
+      (runtime-trace rt)
       (set-runtime-instruction-pointer! rt (+ 1 ip))
       (interpret-atom rt atom)
       (unless (or (empty? (runtime-return-stack rt))
                   (not (eq? 'ready (runtime-state rt))))
         (loop)))))
+
+(define (runtime-trace rt)
+  (pretty-print
+   `(,(runtime-instruction-pointer rt)
+     ,(vector-ref (runtime-memory rt) (runtime-instruction-pointer rt))
+     ,(runtime-stack rt))))
 
 (define (runtime-call! rt v)
   (if (procedure? v)
@@ -304,6 +365,12 @@
 
     [(defer)
      (flit-evaluate rt (cadr atom))]
+
+    [(branch-if-0)
+     (runtime-branch-if-0! rt (cadr atom))]
+
+    [(jump)
+     (runtime-jump! rt (cadr atom))]
 
     [else
      (runtime-push! rt atom)]))

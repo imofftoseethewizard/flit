@@ -2,7 +2,16 @@
 
 literate comment
 
-    [ "a" 1 2 3 #foo define ] ( 42 ) exit [ foo ]
+    [ #foo define ]
+      1 [ if ]
+        "yes" print
+      [ else ]
+        "no" print
+      [ then ]
+      "done" print
+      exit
+
+    [ foo ]
 
     { 4 5 6 }
 
@@ -12,7 +21,7 @@ literate comment
 
     'c' \ bar comment
 
-    [ #bar define ] { 12 [ foo print ] } exit [ bar ]
+    [ #bar define ] { 12 [ foo print ] } exit [ "x" bar ]
 
     #foo
 
